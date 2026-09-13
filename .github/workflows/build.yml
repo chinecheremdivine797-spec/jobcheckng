@@ -43,16 +43,57 @@ jobs:
       - name: Clean unwanted build leftovers
         run: rm -rf dist/.vite android/app/build android/.gradle
 
-      - name: Build release APK
+      - name: Prepare Android signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_BASE64"
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/jobcheckng-release.jks
+          test -s android/jobcheckng-release.jks
+
+      - name: Configure release signing
         working-directory: android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/build.gradle')
+          s = p.read_text()
+          signing = '''\n    signingConfigs {\n        release {\n            storeFile file('../jobcheckng-release.jks')\n            storePassword System.getenv('KEYSTORE_PASSWORD')\n            keyAlias System.getenv('KEY_ALIAS')\n            keyPassword System.getenv('KEY_PASSWORD')\n        }\n    }\n'''
+          if 'signingConfigs {' not in s:
+              s = s.replace('android {', 'android {' + signing, 1)
+          if 'signingConfig signingConfigs.release' not in s:
+              s = s.replace('buildTypes {\n        release {', 'buildTypes {\n        release {\n            signingConfig signingConfigs.release', 1)
+          p.write_text(s)
+          PY
+
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease --no-daemon --no-build-cache
 
-      - name: Verify release APK exists
-        run: test -s android/app/build/outputs/apk/release/app-release-unsigned.apk
+      - name: Verify signed APK exists
+        run: test -s android/app/build/outputs/apk/release/app-release.apk
 
-      - name: Upload release APK
+      - name: Verify APK signature
+        working-directory: android
+        run: apksigner verify --verbose app/build/outputs/apk/release/app-release.apk
+
+      - name: Rename final APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk JobCheck-NG-final.apk
+
+      - name: Upload final signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: JobCheck-NG-final-release-apk
-          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          name: JobCheck-NG-final-signed-apk
+          path: JobCheck-NG-final.apk
           if-no-files-found: error
