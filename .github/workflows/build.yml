@@ -31,6 +31,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      # Final-release build: Paystack public key is injected at build time.
       - name: Build web app
         env:
           VITE_PAYSTACK_PUBLIC_KEY: ${{ secrets.VITE_PAYSTACK_PUBLIC_KEY }}
