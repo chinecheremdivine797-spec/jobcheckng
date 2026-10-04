@@ -48,7 +48,7 @@ jobs:
       - name: Build signed release APK
         run: |
           gradle assembleRelease --no-daemon --stacktrace \
-            -PRELEASE_STORE_FILE=veriprep-release.keystore \
+            -PRELEASE_STORE_FILE=../veriprep-release.keystore \
             -PRELEASE_STORE_PASSWORD="${{ runner.temp }}" \
             -PRELEASE_KEY_ALIAS=veriprep \
             -PRELEASE_KEY_PASSWORD="${{ runner.temp }}"
