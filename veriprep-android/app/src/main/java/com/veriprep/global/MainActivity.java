@@ -63,7 +63,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(Color.rgb(248,250,253));
         scroll.addView(root);
         setContentView(scroll);
-        root.addView(text("VERIPREP GLOBAL", 14, Color.rgb(49,92,255)));
+        root.addView(text("VERIPREP GLOBAL • v0.1.0", 14, Color.rgb(49,92,255)));
         TextView h = text(title, 30, Color.rgb(11,16,32));
         h.setGravity(Gravity.LEFT);
         root.addView(h);
