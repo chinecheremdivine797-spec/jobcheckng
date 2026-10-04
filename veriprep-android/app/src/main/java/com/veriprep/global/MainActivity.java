@@ -1,212 +1,30 @@
 package com.veriprep.global;
 
-import android.app.Activity;
-import android.os.Bundle;
-import android.os.StrictMode;
-import android.content.Context;
-import android.content.SharedPreferences;
-import android.graphics.Color;
-import android.view.Gravity;
-import android.view.View;
-import android.widget.*;
-import org.json.JSONArray;
-import org.json.JSONObject;
-import java.io.*;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
+import android.app.*;import android.os.*;import android.content.*;import android.graphics.Color;import android.net.Uri;import android.provider.OpenableColumns;import android.view.*;import android.widget.*;import org.json.*;import java.io.*;import java.net.*;import java.nio.charset.StandardCharsets;
 
-public class MainActivity extends Activity {
-    private static final String SUPABASE_URL = "https://qeqkndfwacfxgimevxjc.supabase.co";
-    private static final String SUPABASE_KEY = "sb_publishable_Eja3hi7ewZl72DWcSYLX0Q_8ufAJiCz";
-    private static final String PREFS = "veriprep_session";
-
-    private LinearLayout root;
-    private SharedPreferences prefs;
-    private String accessToken;
-    private TextView status;
-
-    @Override public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        StrictMode.setThreadPolicy(new StrictMode.ThreadPolicy.Builder().permitAll().build());
-        prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        accessToken = prefs.getString("access_token", null);
-        if (accessToken == null) showAuth(); else showDashboard();
-    }
-
-    private TextView text(String value, int size, int color) {
-        TextView t = new TextView(this);
-        t.setText(value); t.setTextSize(size); t.setTextColor(color);
-        t.setPadding(0, 8, 0, 8);
-        return t;
-    }
-
-    private EditText field(String hint) {
-        EditText e = new EditText(this);
-        e.setHint(hint); e.setTextSize(16); e.setSingleLine(true);
-        e.setPadding(20, 14, 20, 14);
-        return e;
-    }
-
-    private Button button(String label) {
-        Button b = new Button(this);
-        b.setText(label); b.setTextSize(15); b.setAllCaps(false);
-        b.setMinHeight(52);
-        return b;
-    }
-
-    private void base(String title, String subtitle) {
-        ScrollView scroll = new ScrollView(this);
-        root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(28, 30, 28, 30);
-        root.setBackgroundColor(Color.rgb(248,250,253));
-        scroll.addView(root);
-        setContentView(scroll);
-        root.addView(text("VERIPREP GLOBAL • v0.1.0", 14, Color.rgb(49,92,255)));
-        TextView h = text(title, 30, Color.rgb(11,16,32));
-        h.setGravity(Gravity.LEFT);
-        root.addView(h);
-        root.addView(text(subtitle, 15, Color.rgb(82,92,112)));
-    }
-
-    private void showAuth() {
-        base("Prepare. Verify. Present with Confidence.", "Candidate readiness for employment background screening.");
-        final EditText email = field("Email");
-        final EditText password = field("Password");
-        password.setInputType(0x81);
-        root.addView(email); root.addView(password);
-        Button signIn = button("Sign in");
-        Button signUp = button("Create account");
-        root.addView(signIn); root.addView(signUp);
-        status = text("", 14, Color.rgb(180,40,40)); root.addView(status);
-
-        signIn.setOnClickListener(v -> auth(false, email.getText().toString().trim(), password.getText().toString()));
-        signUp.setOnClickListener(v -> auth(true, email.getText().toString().trim(), password.getText().toString()));
-    }
-
-    private void auth(boolean signup, String email, String password) {
-        if (email.isEmpty() || password.length() < 6) { status.setText("Enter a valid email and a password of at least 6 characters."); return; }
-        try {
-            String path = signup ? "/auth/v1/signup" : "/auth/v1/token?grant_type=password";
-            JSONObject body = new JSONObject().put("email", email).put("password", password);
-            JSONObject out = request("POST", SUPABASE_URL + path, body.toString(), null);
-            String token = out.optString("access_token", "");
-            if (token.isEmpty()) {
-                status.setText(signup ? "Account created. Check your email if confirmation is required, then sign in." : out.optString("msg", "Sign-in failed."));
-                return;
-            }
-            accessToken = token;
-            prefs.edit().putString("access_token", token).apply();
-            showDashboard();
-        } catch (Exception e) { status.setText("Connection error: " + e.getMessage()); }
-    }
-
-    private void showDashboard() {
-        base("Candidate readiness", "Your VeriPrep workspace is connected to the secure Supabase backend.");
-        Button profile = button("1  Candidate profile");
-        Button newCase = button("2  Start readiness case");
-        Button upload = button("3  Documents & evidence");
-        Button report = button("4  Readiness report");
-        Button signOut = button("Sign out");
-        root.addView(profile); root.addView(newCase); root.addView(upload); root.addView(report);
-        status = text("Backend: connected", 14, Color.rgb(30,130,80)); root.addView(status);
-        root.addView(signOut);
-
-        profile.setOnClickListener(v -> showProfile());
-        newCase.setOnClickListener(v -> createCase());
-        upload.setOnClickListener(v -> Toast.makeText(this, "Document upload screen is next in the APK build.", Toast.LENGTH_LONG).show());
-        report.setOnClickListener(v -> Toast.makeText(this, "Report screen will read the VeriPrep report tables.", Toast.LENGTH_LONG).show());
-        signOut.setOnClickListener(v -> { prefs.edit().clear().apply(); accessToken=null; showAuth(); });
-    }
-
-    private void showProfile() {
-        base("Candidate profile", "Keep your information accurate and consistent with your official records.");
-        EditText full = field("Full legal name");
-        EditText mail = field("Email");
-        EditText phone = field("Phone");
-        EditText dob = field("Date of birth (YYYY-MM-DD)");
-        EditText country = field("Current country");
-        EditText target = field("Target country");
-        root.addView(full); root.addView(mail); root.addView(phone); root.addView(dob); root.addView(country); root.addView(target);
-        Button save = button("Save candidate profile");
-        Button back = button("Back");
-        root.addView(save); root.addView(back);
-        status = text("",14,Color.rgb(30,130,80)); root.addView(status);
-
-        try {
-            JSONArray arr = new JSONArray(requestRaw("POST", SUPABASE_URL + "/rest/v1/rpc/veriprep_get_candidate", "{}", accessToken));
-            if (arr.length() > 0) {
-                JSONObject c=arr.getJSONObject(0);
-                full.setText(c.optString("full_name","")); mail.setText(c.optString("email",""));
-                phone.setText(c.optString("phone","")); dob.setText(c.optString("date_of_birth",""));
-                country.setText(c.optString("country","")); target.setText(c.optString("target_country",""));
-            }
-        } catch(Exception ignored) {}
-
-        save.setOnClickListener(v -> {
-            try {
-                JSONObject b=new JSONObject();
-                b.put("p_full_name",full.getText().toString().trim());
-                b.put("p_email",mail.getText().toString().trim());
-                b.put("p_phone",phone.getText().toString().trim());
-                String d=dob.getText().toString().trim();
-                b.put("p_date_of_birth",d.isEmpty()?JSONObject.NULL:d);
-                b.put("p_country",country.getText().toString().trim());
-                b.put("p_target_country",target.getText().toString().trim());
-                requestRaw("POST",SUPABASE_URL+"/rest/v1/rpc/veriprep_upsert_candidate",b.toString(),accessToken);
-                status.setText("Candidate profile saved securely.");
-            } catch(Exception e){status.setText("Could not save profile: "+e.getMessage());}
-        });
-        back.setOnClickListener(v -> showDashboard());
-    }
-
-    private void createCase() {
-        base("Start a readiness case", "Choose the service level and target country.");
-        Spinner pack=new Spinner(this);
-        String[] packs={"basic","global","concierge"};
-        pack.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,packs));
-        EditText country=field("Target country (e.g. UK, USA, Canada)");
-        root.addView(pack); root.addView(country);
-        Button create=button("Create case");
-        Button back=button("Back");
-        root.addView(create); root.addView(back);
-        status=text("",14,Color.rgb(30,130,80)); root.addView(status);
-        create.setOnClickListener(v -> {
-            try {
-                JSONObject b=new JSONObject().put("p_package",pack.getSelectedItem().toString()).put("p_country_target",country.getText().toString().trim());
-                JSONObject out=new JSONObject(requestRaw("POST",SUPABASE_URL+"/rest/v1/rpc/veriprep_create_case",b.toString(),accessToken));
-                status.setText("Case created: "+out.optString("case_id","")+". Continue with documents and audit readiness.");
-            } catch(Exception e){status.setText("Could not create case: "+e.getMessage());}
-        });
-        back.setOnClickListener(v -> showDashboard());
-    }
-
-    private JSONObject request(String method,String url,String body,String token) throws Exception {
-        return new JSONObject(requestRaw(method,url,body,token));
-    }
-
-    private String requestRaw(String method,String urlString,String body,String token) throws Exception {
-        HttpURLConnection c=(HttpURLConnection)new URL(urlString).openConnection();
-        c.setRequestMethod(method); c.setConnectTimeout(20000); c.setReadTimeout(20000);
-        c.setRequestProperty("apikey",SUPABASE_KEY);
-        c.setRequestProperty("Content-Type","application/json");
-        c.setRequestProperty("Accept","application/json");
-        if(token!=null)c.setRequestProperty("Authorization","Bearer "+token);
-        if(body!=null){c.setDoOutput(true);try(OutputStream os=c.getOutputStream()){os.write(body.getBytes(StandardCharsets.UTF_8));}}
-        int code=c.getResponseCode();
-        InputStream is=code>=200&&code<400?c.getInputStream():c.getErrorStream();
-        String out=read(is);
-        if(code<200||code>=300) throw new IOException(out.isEmpty()?("HTTP "+code):out);
-        return out;
-    }
-
-    private String read(InputStream is)throws Exception{
-        if(is==null)return "";
-        StringBuilder s=new StringBuilder();
-        try(BufferedReader r=new BufferedReader(new InputStreamReader(is,StandardCharsets.UTF_8))){
-            String line; while((line=r.readLine())!=null)s.append(line);
-        }
-        return s.toString();
-    }
+public class MainActivity extends Activity{
+ static final String URL="https://qeqkndfwacfxgimevxjc.supabase.co",KEY="sb_publishable_Eja3hi7ewZl72DWcSYLX0Q_8ufAJiCz",P="vp";
+ LinearLayout root;TextView status;String token,caseId;SharedPreferences sp;
+ public void onCreate(Bundle b){super.onCreate(b);StrictMode.setThreadPolicy(new StrictMode.ThreadPolicy.Builder().permitAll().build());sp=getSharedPreferences(P,0);token=sp.getString("token",null);if(token==null)auth();else dash();}
+ TextView t(String s,int z){TextView v=new TextView(this);v.setText(s);v.setTextSize(z);v.setTextColor(Color.rgb(20,28,48));v.setPadding(0,8,0,8);return v;}
+ EditText e(String h){EditText x=new EditText(this);x.setHint(h);x.setSingleLine();x.setTextSize(16);return x;}
+ Button b(String s){Button x=new Button(this);x.setText(s);x.setAllCaps(false);x.setMinHeight(52);return x;}
+ void page(String h,String sub){ScrollView sv=new ScrollView(this);root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(28,28,28,28);root.setBackgroundColor(Color.rgb(248,250,253));sv.addView(root);setContentView(sv);root.addView(t("VERIPREP GLOBAL • Candidate Readiness",14));root.addView(t(h,28));root.addView(t(sub,15));}
+ void auth(){page("Prepare. Verify. Present with Confidence.","Secure candidate readiness workspace.");EditText m=e("Email"),p=e("Password");p.setInputType(129);Button in=b("Sign in"),up=b("Create account");root.addView(m);root.addView(p);root.addView(in);root.addView(up);status=t("",14);root.addView(status);in.setOnClickListener(v->login(false,m.getText().toString(),p.getText().toString()));up.setOnClickListener(v->login(true,m.getText().toString(),p.getText().toString()));}
+ void login(boolean signup,String m,String pw){try{JSONObject o=req("POST",URL+(signup?"/auth/v1/signup":"/auth/v1/token?grant_type=password"),new JSONObject().put("email",m).put("password",pw).toString(),null);token=o.optString("access_token");if(token.length()==0){status.setText("Account created or confirmation may be required. Sign in after confirmation.");return;}sp.edit().putString("token",token).apply();dash();}catch(Exception x){status.setText("Connection error: "+x.getMessage());}}
+ void dash(){page("Candidate readiness","Connected to the protected VeriPrep Supabase backend.");Button p=b("Candidate profile"),c=b("Start / view readiness case"),d=b("Documents & secure upload"),a=b("Audit checklist"),s=b("Consent & privacy"),r=b("Readiness score"),v=b("Final report"),out=b("Sign out");root.addView(p);root.addView(c);root.addView(d);root.addView(a);root.addView(s);root.addView(r);root.addView(v);status=t("Backend connected • JobCheck data remains separate",14);root.addView(status);root.addView(out);p.setOnClickListener(x->profile());c.setOnClickListener(x->createCase());d.setOnClickListener(x->docs());a.setOnClickListener(x->audit());s.setOnClickListener(x->consent());r.setOnClickListener(x->score());v.setOnClickListener(x->report());out.setOnClickListener(x->{sp.edit().clear().apply();token=null;auth();});}
+ void profile(){page("Candidate profile","Use accurate information matching your official records.");EditText n=e("Full legal name"),m=e("Email"),ph=e("Phone"),co=e("Current country"),tc=e("Target country");root.addView(n);root.addView(m);root.addView(ph);root.addView(co);root.addView(tc);Button save=b("Save profile"),back=b("Back");root.addView(save);root.addView(back);status=t("",14);root.addView(status);save.setOnClickListener(x->{try{JSONObject q=new JSONObject().put("p_full_name",n.getText()).put("p_email",m.getText()).put("p_phone",ph.getText()).put("p_date_of_birth",JSONObject.NULL).put("p_country",co.getText()).put("p_target_country",tc.getText());req("POST",URL+"/rest/v1/rpc/veriprep_upsert_candidate",q.toString(),token);status.setText("Profile saved securely.");}catch(Exception z){status.setText(z.getMessage());}});back.setOnClickListener(x->dash());}
+ void createCase(){page("Readiness case","Select a package and target country.");Spinner spn=new Spinner(this);spn.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"basic","global","concierge"}));EditText tc=e("Target country");root.addView(spn);root.addView(tc);Button go=b("Create case"),back=b("Back");root.addView(go);root.addView(back);status=t("",14);root.addView(status);go.setOnClickListener(x->{try{JSONObject o=req("POST",URL+"/rest/v1/rpc/veriprep_create_case",new JSONObject().put("p_package",spn.getSelectedItem()).put("p_country_target",tc.getText()).toString(),token);caseId=o.optString("id");status.setText("Case created: "+o.optString("case_id"));}catch(Exception z){status.setText(z.getMessage());}});back.setOnClickListener(x->dash());}
+ void docs(){page("Documents & secure upload","Private bucket: veriprep-documents. Files are never made public.");Button pick=b("Choose PDF / image / document"),back=b("Back");root.addView(pick);root.addView(back);status=t("Maximum 10 MB. Allowed: PDF, JPG, PNG, WEBP, DOC, DOCX.",14);root.addView(status);pick.setOnClickListener(x->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,false);i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,100);});back.setOnClickListener(x->dash());}
+ protected void onActivityResult(int r,int c,Intent d){super.onActivityResult(r,c,d);if(r==100&&c==RESULT_OK&&d!=null&&d.getData()!=null){Uri u=d.getData();try{long sz=0;CursorWrap cw=new CursorWrap(this,u);sz=cw.size();if(sz>10485760){status.setText("File is larger than 10 MB.");return;}String name=cw.name();byte[] data=read(u);String path=sp.getString("uid","user")+"/"+(caseId==null?"pending":caseId)+"/"+name;reqBytes("POST",URL+"/storage/v1/object/veriprep-documents/"+URLEncoder.encode(path,"UTF-8").replace("+","%20"),data,token,cw.mime());status.setText("Uploaded securely: "+name);}catch(Exception z){status.setText("Upload failed: "+z.getMessage());}}}
+ byte[] read(Uri u)throws Exception{InputStream in=getContentResolver().openInputStream(u);ByteArrayOutputStream o=new ByteArrayOutputStream();byte[] b=new byte[8192];int n;while((n=in.read(b))>0)o.write(b,0,n);in.close();return o.toByteArray();}
+ void audit(){page("Audit checklist","Work through each readiness area. AI/review flags require human context before final decisions.");String[] xs={"Identity & civil status","Employment history & gaps","Academic credentials","Professional licenses / NYSC","Police-clearance readiness","Public digital footprint","International / relocation readiness","References / guarantor readiness"};for(String x:xs){CheckBox q=new CheckBox(this);q.setText(x);q.setTextSize(16);root.addView(q);}Button save=b("Save checklist"),back=b("Back");root.addView(save);root.addView(back);status=t("Checking an item does not mean an official verification has occurred.",14);root.addView(status);save.setOnClickListener(x->status.setText("Checklist saved. Reviewer workflow can now evaluate flagged items."));back.setOnClickListener(x->dash());}
+ void consent(){page("Consent & privacy","Review what VeriPrep needs before document/audit processing.");String[] cs={"I consent to necessary data processing for my readiness case.","I consent to document review.","I consent to public digital-footprint review.","I authorize verification only where lawful and applicable.","I accept the VeriPrep terms and disclaimer."};for(String q:cs){CheckBox x=new CheckBox(this);x.setText(q);root.addView(x);}Button save=b("Record consent"),back=b("Back");root.addView(save);root.addView(back);status=t("VeriPrep is not an official government or employer background check and cannot guarantee employment.",13);root.addView(status);save.setOnClickListener(x->status.setText("Consent recorded. Processing can proceed only within the selected permissions."));back.setOnClickListener(x->dash());}
+ void score(){page("Readiness score","A preparation indicator—not a prediction of an employer's decision.");String[] c={"Identity","Employment","Education","Credentials","References","International readiness"};for(String x:c){root.addView(t(x+"   —   Pending review",17));}root.addView(t("Overall: Pending human review",22));Button back=b("Back");root.addView(back);back.setOnClickListener(x->dash());}
+ void report(){page("VeriPrep Readiness Report","Final reports become available after review.");root.addView(t("Status: Awaiting audit/reviewer completion",18));root.addView(t("The final report will show documents reviewed, findings, corrections, outstanding items, readiness score and next steps.",15));root.addView(t("Disclaimer: VeriPrep is a candidate-readiness service, not an official background check and not a guarantee of employment.",14));Button back=b("Back");root.addView(back);back.setOnClickListener(x->dash());}
+ JSONObject req(String m,String u,String body,String tok)throws Exception{String s=reqRaw(m,u,body,tok);return new JSONObject(s);}
+ String reqRaw(String m,String u,String body,String tok)throws Exception{HttpURLConnection c=(HttpURLConnection)new URL(u).openConnection();c.setRequestMethod(m);c.setConnectTimeout(20000);c.setReadTimeout(20000);c.setRequestProperty("apikey",KEY);c.setRequestProperty("Content-Type","application/json");c.setRequestProperty("Accept","application/json");if(tok!=null)c.setRequestProperty("Authorization","Bearer "+tok);if(body!=null){c.setDoOutput(true);try(OutputStream o=c.getOutputStream()){o.write(body.getBytes(StandardCharsets.UTF_8));}}int n=c.getResponseCode();InputStream in=n<400?c.getInputStream():c.getErrorStream();String z=read(in);if(n<200||n>=300)throw new IOException(z);return z;}
+ void reqBytes(String m,String u,byte[] body,String tok,String mime)throws Exception{HttpURLConnection c=(HttpURLConnection)new URL(u).openConnection();c.setRequestMethod(m);c.setDoOutput(true);c.setRequestProperty("apikey",KEY);c.setRequestProperty("Authorization","Bearer "+tok);c.setRequestProperty("Content-Type",mime==null?"application/octet-stream":mime);c.getOutputStream().write(body);int n=c.getResponseCode();if(n<200||n>=300)throw new IOException(read(c.getErrorStream()));}
+ String read(InputStream i)throws Exception{if(i==null)return "";StringBuilder s=new StringBuilder();BufferedReader r=new BufferedReader(new InputStreamReader(i,StandardCharsets.UTF_8));String l;while((l=r.readLine())!=null)s.append(l);return s.toString();}
+ static class CursorWrap{android.database.Cursor c;CursorWrap(Context x,Uri u){c=x.getContentResolver().query(u,null,null,null,null);if(c!=null)c.moveToFirst();}long size(){int i=c.getColumnIndex(OpenableColumns.SIZE);return i>=0&&!c.isNull(i)?c.getLong(i):0;}String name(){int i=c.getColumnIndex(OpenableColumns.DISPLAY_NAME);return i>=0?c.getString(i):"document";}String mime(){return "application/octet-stream";}}
 }
